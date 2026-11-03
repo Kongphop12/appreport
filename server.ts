@@ -1,0 +1,418 @@
+import "dotenv/config";
+import express from "express";
+import type { Request, Response } from "express";
+import path from "path";
+import { fileURLToPath } from "url";
+import { GoogleGenAI, Type } from "@google/genai";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function getGeminiClient(): GoogleGenAI {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+    throw new Error("MISSING_API_KEY");
+  }
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        "User-Agent": "aistudio-build",
+      },
+    },
+  });
+}
+
+interface ImageInputPayload {
+  mimeType: string;
+  data: string;
+  fileName?: string;
+}
+
+interface ExtractRequestBody {
+  files?: ImageInputPayload[];
+  image1?: ImageInputPayload | null;
+  image2?: ImageInputPayload | null;
+}
+
+function extractFourDigitOrderNumber(raw: unknown): string {
+  if (raw === undefined || raw === null) return "-";
+  const str = String(raw).trim();
+  if (
+    !str ||
+    str === "-" ||
+    str === "N/A" ||
+    str === "null" ||
+    str === "undefined" ||
+    str.toLowerCase() === "none"
+  ) {
+    return "-";
+  }
+
+  const digitMatches = str.match(/\d+/g);
+  if (digitMatches && digitMatches.length > 0) {
+    const exactFour = digitMatches.find((m) => m.length === 4);
+    if (exactFour) {
+      return `#${exactFour}`;
+    }
+    const validNum = digitMatches.find((m) => m.length >= 3 && m.length <= 6);
+    if (validNum) {
+      return `#${validNum}`;
+    }
+    const allDigits = digitMatches.join("");
+    if (allDigits.length >= 4) {
+      return `#${allDigits.slice(-4)}`;
+    }
+    return `#${allDigits}`;
+  }
+
+  if (/^\d{3,6}$/.test(str)) {
+    return `#${str}`;
+  }
+
+  return str.startsWith("#") ? str.split(/\s+/)[0] : `#${str.split(/\s+/)[0]}`;
+}
+
+
+async function generateContentWithRetry(
+  ai: GoogleGenAI,
+  params: Parameters<typeof ai.models.generateContent>[0],
+  maxRetries = 2
+) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await ai.models.generateContent(params);
+    } catch (err: unknown) {
+      lastError = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      const isTransient =
+        msg.includes("503") ||
+        msg.includes("UNAVAILABLE") ||
+        msg.includes("high demand") ||
+        msg.includes("overloaded");
+      if (isTransient && attempt < maxRetries) {
+        console.warn(
+          `Gemini 503/UNAVAILABLE encountered, retrying attempt ${attempt + 1}/${maxRetries} after delay...`
+        );
+        await new Promise((res) => setTimeout(res, 1200 * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+}
+
+async function startServer() {
+  const app = express();
+  const PORT = Number(process.env.PORT) || 3000;
+
+  app.use(express.json({ limit: "40mb" }));
+
+  app.get("/api/health", (_req: Request, res: Response) => {
+    res.json({ status: "ok" });
+  });
+
+  app.post("/api/extract-report", async (req: Request, res: Response) => {
+    try {
+      const body = req.body as ExtractRequestBody;
+      const inputFiles: ImageInputPayload[] = Array.isArray(body?.files) && body.files.length > 0
+        ? body.files.filter((f) => Boolean(f?.data))
+        : [body?.image1, body?.image2].filter(
+            (f): f is ImageInputPayload => Boolean(f?.data)
+          );
+
+      if (inputFiles.length === 0) {
+        res.status(400).json({
+          error:
+            "กรุณาอัปโหลดรูปภาพหรือเอกสารอย่างน้อย 1 ไฟล์ (รองรับการใส่หลายไฟล์ เช่น สลิป, ใบออเดอร์, ใบเสร็จ/ใบกำกับภาษี ABB-FV เพื่อให้ AI วิเคราะห์ร่วมกัน)",
+        });
+        return;
+      }
+
+      const ai = getGeminiClient();
+
+      const parts: Array<
+        | { inlineData: { mimeType: string; data: string } }
+        | { text: string }
+      > = [];
+
+      inputFiles.forEach((file, idx) => {
+        const nameLabel = file.fileName ? ` (ชื่อไฟล์: ${file.fileName})` : "";
+        parts.push({
+          text: `[เอกสาร/ไฟล์ที่ ${idx + 1}${nameLabel}]:`,
+        });
+        parts.push({
+          inlineData: {
+            mimeType: file.mimeType || "image/png",
+            data: file.data,
+          },
+        });
+      });
+
+      const response = await generateContentWithRetry(ai, {
+        model: "gemini-3.8-flash",
+        contents: {
+          parts: [
+            ...parts,
+            {
+              text: [
+                `ผู้ใช้ได้อัปโหลดเอกสารทั้งหมด ${inputFiles.length} ไฟล์เพื่อวิเคราะห์ข้อมูลภาษีขายและคำสั่งซื้อ`,
+                "หน้าที่ของคุณคือตรวจสอบเอกสารทุกไฟล์และสกัดข้อมูลออเดอร์/ยอดขายทั้งหมดที่พบ:",
+                "",
+                "กฎเหล็กเรื่อง Order Number (ความแม่นยำสูงสุด):",
+                "- 'ชื่อโปรเจกต์' (Project / Project Name / โครงการ / ชื่องาน) กับ 'เลขออเดอร์' (Order Number / คำสั่งซื้อ) คือสิ่งเดียวกัน! ถ้าในเอกสารพบคำว่า 'ชื่อโปรเจกต์', 'Project', 'โครงการ' หรือ 'Order' ให้ดึงตัวเลข 4 ตัวจากตรงนี้มาเป็น orderNumber (เช่น 4092 หรือ #4092)",
+                "- ตัวเลขอื่นๆ ในเอกสาร เช่น เลขติดตามพัสดุ (Tracking No.), เลขพัสดุ, ขนส่ง, รหัสสินค้า/บาร์โค้ด (SKU/Barcode), เลขประจำตัวผู้เสียภาษี (Tax ID), รหัสไปรษณีย์, เบอร์โทรศัพท์ 'ไม่ใช่เลขออเดอร์ ปล่อยเขาไป (ห้ามนำมาใส่เด็ดขาด)'",
+                "- หากอัปโหลดมาหลายไฟล์ ให้ตรวจหาความเชื่อมโยงระหว่างเอกสาร (เช่น สลิปกับใบเสร็จของออเดอร์เดียวกัน ให้จับคู่เป็นรายการเดียวกันโดยอิงจากชื่อโปรเจกต์/เลขออเดอร์)",
+                "",
+                "กฎการตรวจสอบและป้องกันข้อมูลซ้ำซ้อน (Deep Learning / AI Precision Deduplication):",
+                "- หากในเอกสารมีรายการออเดอร์ซ้ำกัน ให้โมเดลคิด วิเคราะห์ และตรวจสอบข้อมูลอย่างละเอียดลึกซึ้ง:",
+                "- หากพบว่าข้อมูลบางอย่างในรายการ/pk ในไฟล์ไม่ตรงกัน (เช่น ยอดขายต่างกัน หรือเป็นคนละรายการสินค้า) ให้นำมาแสดงตามจริง",
+                "- แต่ถ้ายอดขายซ้ำกัน (ยอดเงินตรงกัน) หรือ ออเดอร์และใบเสร็จ/ใบแจ้งหนี้ซ้ำกัน ให้โมเดลคิดและตรวจสอบอย่างแม่นยำที่สุด และนำมาแสดงแค่อันเดียวเท่านั้นเพื่อป้องกันข้อมูลซ้ำซ้อน (กันซ้ำกันเด็ดขาด)",
+                "",
+                "แต่ละรายการใน items ประกอบด้วย:",
+                "1. orderNumber: เลข Order / คำสั่งซื้อ 4 ตัวที่ตรงกับชื่อโปรเจกต์หรือเลขออเดอร์ (ห้ามคิดเอง ถ้าไม่พบเลข 4 ตัวให้ใส่ '-')",
+                "2. abbFvNumber: เลขที่ใบเสร็จ/ใบแจ้งหนี้ หรือใบกำกับภาษีอย่างย่อ (ABB) หรือใบกำกับภาษีเต็มรูป (FV) เช่น INV-..., REC-..., ABB-..., FV-... (ถ้าไม่มีให้ใส่ '-')",
+                "3. salesAmount: ยอดขายรวมสุทธิ (ตัวเลขทศนิยม 2 ตำแหน่ง เช่น 1605.00)",
+                "4. vatAmount: ยอดภาษีมูลค่าเพิ่ม VAT 7% (ตัวเลขทศนิยม 2 ตำแหน่ง หากในใบกำกับภาษีระบุ VAT ให้ดึงค่าตามจริง หากไม่ระบุแยกแต่รวม VAT ให้คำนวณ salesAmount * 7 / 107 ปัดเศษ 2 ตำแหน่ง)",
+                "5. salesChannel: ช่องทางขาย ให้อิงตามที่ระบุจริงในเอกสาร เช่น Draft Orders, Online Store, Shopee, TikTok Shop, Lazada, LINE OA, หน้าร้าน หากไม่ระบุให้ใช้ 'Online Store'",
+                "6. paymentMethod: ช่องทางการรับเงิน ให้อิงตามที่ปรากฏจริงในเอกสารเท่านั้น หากไม่มีข้อมูลในเอกสาร ให้ใส่ '-' ห้ามคิดขึ้นมาเองเด็ดขาด",
+                "7. cancelled: สถานะลูกค้ายกเลิก หากในไฟล์ระบุว่า 'ไม่ยกเลิก', 'ปกติ', 'สำเร็จ' หรือไม่มีการยกเลิก ให้ใส่ '-' หากในเอกสารระบุว่าลูกค้ายกเลิกหรือ 'ใช่' ให้ใส่ 'ใช่'",
+                "8. aiNote: สรุปสั้นๆ 1 ประโยคว่าสกัดจากไฟล์ใดและยืนยันความตรงกันของชื่อโปรเจกต์กับเลขออเดอร์",
+                "ใช้หลักการวิเคราะห์โมเดลแบบ Train/Test 80-20 Validation Rigor: ตรวจสอบความถูกต้องของข้อมูลออเดอร์ซ้ำซ้อนอย่างเข้มงวด 100% เพื่อความแม่นยำสูงสุด",
+                "ตอบกลับเป็น JSON ตาม Schema ที่กำหนดเท่านั้น",
+              ].join("\n"),
+            },
+          ],
+        },
+        config: {
+          systemInstruction:
+            "คุณคือผู้เชี่ยวชาญด้านบัญชีและภาษีขายของไทย หน้าที่ของคุณคือสกัดข้อมูลจากเอกสารทุกไฟล์ด้วยความแม่นยำระดับ Train/Test 80-20 Validation Rigor กฎสำคัญที่สุด: 'ชื่อโปรเจกต์' กับ 'เลขออเดอร์' ในเอกสารคืออันเดียวกัน ให้ดึงเฉพาะตัวเลข 4 ตัวที่ตรงกับชื่อโปรเจกต์หรือเลขออเดอร์มาเป็น orderNumber เท่านั้น และหากมีออเดอร์ซ้ำกันแต่ข้อมูลใน pk ไม่ตรงกันให้นำมาแสดงตามจริง แต่ถ้ายอดขายซ้ำกัน หรือออเดอร์และใบเสร็จ/ใบแจ้งหนี้ซ้ำกัน ให้โมเดลตรวจสอบอย่างแม่นยำและนำมาแสดงแค่อันเดียวเพื่อกันข้อมูลซ้ำซ้อนเด็ดขาด",
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              items: {
+                type: Type.ARRAY,
+                description:
+                  "รายการออเดอร์และยอดขายทั้งหมดที่พบในเอกสาร โดยผ่านการคัดกรองข้อมูลซ้ำซ้อนด้วย Validation 80-20 แล้ว",
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    orderNumber: {
+                      type: Type.STRING,
+                      description:
+                        "1. Order Number เลขที่คำสั่งซื้อ 4 ตัว ซึ่งคืออันเดียวกับชื่อโปรเจกต์ (ถ้าไม่พบใส่ '-')",
+                    },
+                    abbFvNumber: {
+                      type: Type.STRING,
+                      description:
+                        "2. ใบเสร็จ/ใบแจ้งหนี้ หรือ Number ABB-FV เลขที่ใบเสร็จหรือใบกำกับภาษีอย่างย่อหรือเต็มรูป",
+                    },
+                    salesAmount: {
+                      type: Type.NUMBER,
+                      description: "3. ยอดขายรวมสุทธิ (ตัวเลข)",
+                    },
+                    vatAmount: {
+                      type: Type.NUMBER,
+                      description: "4. ยอดภาษีมูลค่าเพิ่ม VAT 7% (ตัวเลข)",
+                    },
+                    salesChannel: {
+                      type: Type.STRING,
+                      description:
+                        "5. ช่องทางขายตามที่ระบุในเอกสารจริง เช่น Draft Orders, Online Store, Shopee, หน้าร้าน",
+                    },
+                    paymentMethod: {
+                      type: Type.STRING,
+                      description:
+                        "6. ช่องทางการรับเงินตามเอกสารจริง ถ้าไม่มีให้ใส่ '-'",
+                    },
+                    aiNote: {
+                      type: Type.STRING,
+                      description: "หมายเหตุสั้นๆ จากการตรวจจับข้อมูล",
+                    },
+                  },
+                  required: [
+                    "orderNumber",
+                    "abbFvNumber",
+                    "salesAmount",
+                    "vatAmount",
+                    "salesChannel",
+                    "paymentMethod",
+                  ],
+                },
+              },
+              summaryNote: {
+                type: Type.STRING,
+                description: "สรุปผลการวิเคราะห์ไฟล์ทั้งหมด",
+              },
+            },
+            required: ["items"],
+          },
+        },
+      });
+
+      const rawText = (response.text ?? "{}").trim();
+      let parsedJson: {
+        items?: Array<{
+          orderNumber?: string;
+          abbFvNumber?: string;
+          salesAmount?: number;
+          vatAmount?: number;
+          salesChannel?: string;
+          paymentMethod?: string;
+          aiNote?: string;
+        }>;
+        orderNumber?: string;
+        abbFvNumber?: string;
+        salesAmount?: number;
+        vatAmount?: number;
+        salesChannel?: string;
+        paymentMethod?: string;
+        aiNote?: string;
+      } = {};
+
+      try {
+        parsedJson = JSON.parse(rawText);
+      } catch (e) {
+        console.error("Failed to parse Gemini response as JSON:", rawText);
+      }
+
+      const rawList = Array.isArray(parsedJson.items) && parsedJson.items.length > 0
+        ? parsedJson.items
+        : parsedJson.orderNumber || parsedJson.salesAmount
+        ? [parsedJson]
+        : [];
+
+      // Process and sanitize each item
+      const processedItems = rawList.map((item) => {
+        const salesAmount = Number.isFinite(Number(item.salesAmount))
+          ? Math.round(Number(item.salesAmount) * 100) / 100
+          : 0;
+        const vatAmount = Number.isFinite(Number(item.vatAmount))
+          ? Math.round(Number(item.vatAmount) * 100) / 100
+          : Math.round(((salesAmount * 7) / 107) * 100) / 100;
+
+        const orderNumber = extractFourDigitOrderNumber(item.orderNumber);
+        const abbFvNumber = (item.abbFvNumber || "-").trim();
+        const salesChannel = (item.salesChannel || "Online Store").trim();
+        const paymentMethod = (item.paymentMethod || "-").trim();
+        const aiNote = (item.aiNote || `สกัดจากเอกสาร ${inputFiles.length} ไฟล์`).trim();
+
+        return {
+          orderNumber,
+          abbFvNumber,
+          salesAmount,
+          vatAmount,
+          salesChannel,
+          paymentMethod,
+          aiNote,
+        };
+      });
+
+      // Deduplicate items using Primary Key (orderNumber + abbFvNumber) across files
+      const uniqueItems: typeof processedItems = [];
+      const seenPrimaryKeys = new Set<string>();
+
+      for (const item of processedItems) {
+        if (item.orderNumber === "-" || !item.orderNumber) {
+          uniqueItems.push(item);
+          continue;
+        }
+
+        const primaryKey = `${item.orderNumber.toLowerCase()}_${item.abbFvNumber.toLowerCase()}`;
+        if (seenPrimaryKeys.has(primaryKey) || seenPrimaryKeys.has(item.orderNumber.toLowerCase())) {
+          continue; // Duplicate order or primary key across files -> skip
+        }
+
+        seenPrimaryKeys.add(primaryKey);
+        seenPrimaryKeys.add(item.orderNumber.toLowerCase());
+        uniqueItems.push(item);
+      }
+
+      const firstItem = uniqueItems[0] || {
+        orderNumber: "-",
+        abbFvNumber: "-",
+        salesAmount: 0,
+        vatAmount: 0,
+        salesChannel: "Online Store",
+        paymentMethod: "-",
+        aiNote: "ไม่พบข้อมูลรายการในเอกสารที่ส่งมา",
+      };
+
+      res.json({
+        items: uniqueItems,
+        totalFiles: inputFiles.length,
+        orderNumber: firstItem.orderNumber,
+        abbFvNumber: firstItem.abbFvNumber,
+        salesAmount: firstItem.salesAmount,
+        vatAmount: firstItem.vatAmount,
+        salesChannel: firstItem.salesChannel,
+        paymentMethod: firstItem.paymentMethod,
+        aiNote: firstItem.aiNote,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Error in /api/extract-report:", message);
+
+      if (
+        message === "MISSING_API_KEY" ||
+        message.includes("API_KEY_INVALID") ||
+        message.includes("PERMISSION_DENIED") ||
+        message.includes("403")
+      ) {
+        res.status(403).json({
+          error:
+            "ไม่สามารถเรียกใช้ Gemini API ได้ กรุณาตรวจสอบการตั้งค่า GEMINI_API_KEY ในเมนู Settings > Secrets",
+        });
+        return;
+      }
+
+      if (message.includes("RESOURCE_EXHAUSTED") || message.includes("429")) {
+        res.status(429).json({
+          error:
+            "โควตาการเรียกใช้ AI เต็มชั่วคราว (429) กรุณารอสักครู่แล้วลองใหม่",
+        });
+        return;
+      }
+
+      if (
+        message.includes("503") ||
+        message.includes("UNAVAILABLE") ||
+        message.includes("high demand")
+      ) {
+        res.status(503).json({
+          error:
+            "โมเดล AI กำลังมีผู้ใช้งานหนาแน่นชั่วคราว (503 Service Unavailable) หากท่านต้องการนำเข้าข้อมูลจากไฟล์ XLSX หรือ CSV สามารถนำเข้าสู่ตารางได้โดยตรง 100% โดยไม่ต้องพึ่งพา AI ครับ",
+        });
+        return;
+      }
+
+      res.status(500).json({
+        error: `เกิดข้อผิดพลาดในการประมวลผลรูปภาพด้วย AI: ${message}`,
+      });
+    }
+  });
+
+  if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(__dirname, "dist");
+    app.use(express.static(distPath));
+    app.get("*", (_req: Request, res: Response) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer();

@@ -26,6 +26,7 @@ export function exportToExcel(rows: ReportRow[], meta: ReportHeaderMeta): void {
       "VAT",
       "ช่องทางขาย",
       "ช่องทางการรับเงิน",
+      "ลูกค้ายกเลิก",
     ],
   ];
 
@@ -38,6 +39,7 @@ export function exportToExcel(rows: ReportRow[], meta: ReportHeaderMeta): void {
       Number(row.vatAmount.toFixed(2)),
       row.salesChannel,
       row.paymentMethod,
+      row.cancelled || "-",
     ]);
   });
 
@@ -47,6 +49,7 @@ export function exportToExcel(rows: ReportRow[], meta: ReportHeaderMeta): void {
     `${rows.length} รายการ`,
     Number(totalSales.toFixed(2)),
     Number(totalVat.toFixed(2)),
+    "",
     "",
     "",
   ]);
@@ -59,7 +62,8 @@ export function exportToExcel(rows: ReportRow[], meta: ReportHeaderMeta): void {
     { wch: 16 },
     { wch: 14 },
     { wch: 18 },
-    { wch: 22 },
+    { wch: 20 },
+    { wch: 14 },
   ];
 
   const workbook = XLSX.utils.book_new();
@@ -76,6 +80,7 @@ export function exportToCsv(rows: ReportRow[]): void {
     "VAT",
     "ช่องทางขาย",
     "ช่องทางการรับเงิน",
+    "ลูกค้ายกเลิก",
   ];
 
   const escapeCsv = (val: string | number) => {
@@ -97,11 +102,13 @@ export function exportToCsv(rows: ReportRow[]): void {
         row.vatAmount.toFixed(2),
         row.salesChannel,
         row.paymentMethod,
+        row.cancelled || "-",
       ]
         .map(escapeCsv)
         .join(",")
     );
   });
+
 
   const csvWithBom = "\uFEFF" + lines.join("\r\n");
   const blob = new Blob([csvWithBom], { type: "text/csv;charset=utf-8;" });
@@ -304,7 +311,7 @@ class ReportSaleOrderApp:
 
         tk.Button(
             frame,
-            text="📁 นำเข้าไฟล์ (รองรับหลายไฟล์ .csv, .xlsx)",
+            text="นำเข้าไฟล์ (รองรับหลายไฟล์ .csv, .xlsx)",
             command=self.import_files,
             bg="#15803d",
             fg="#ffffff",
@@ -316,7 +323,7 @@ class ReportSaleOrderApp:
 
         tk.Button(
             frame,
-            text="🤖 รัน DL Model โฟลเดอร์ uploads",
+            text="รัน DL Model โฟลเดอร์ uploads",
             command=self.process_uploads_folder,
             bg="#0f172a",
             fg="#ffffff",

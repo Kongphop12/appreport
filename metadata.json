@@ -1,6 +1,6 @@
 {
   "name": "Report sale order",
-  "description": "โปรแกรมตารางรายงานยอดขายและใบกำกับภาษี ABB-FV สไตล์ Excel พร้อมเมนูอัปโหลด 2 รูปประมวลผลด้วย AI ค้นหาข้อมูล ส่งออกไฟล์ Excel และพิมพ์รายงานหน้ากระดาษ A4",
+  "description": "โปรแกรมตารางรายงานยอดขายและใบกำกับภาษี",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

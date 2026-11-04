@@ -14,6 +14,7 @@ export interface ReportRow {
   vatAmount: number; // VAT
   salesChannel: string; // ช่องทางขาย
   paymentMethod: string; // ช่องทางการรับเงิน
+  cancelled?: string; // ลูกค้ายกเลิก (- / ใช่)
   createdAt: string;
   aiNote?: string;
   sourceImages?: SourceImagesMeta;
@@ -41,7 +42,7 @@ export interface ReportHeaderMeta {
   customHeaderBlank?: string;
 }
 
-export type ActiveTab = "sheet" | "print";
+export type ActiveTab = "sheet" | "print" | "storage";
 
 export type ColumnKey =
   | "orderNumber"
@@ -49,9 +50,11 @@ export type ColumnKey =
   | "salesAmount"
   | "vatAmount"
   | "salesChannel"
-  | "paymentMethod";
+  | "paymentMethod"
+  | "cancelled";
 
 export interface SelectedCell {
   rowId: string;
   colKey: ColumnKey;
 }
+

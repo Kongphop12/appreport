@@ -40,6 +40,7 @@ interface DualUploadPanelProps {
   onPreviewPair?: () => void;
   onPreviewFile?: (file: UploadedImage) => void;
   language?: Language;
+  showButtons?: boolean;
 }
 
 function formatFileSize(bytes?: number): string {
@@ -70,6 +71,7 @@ export const DualUploadPanel: React.FC<DualUploadPanelProps> = ({
   onPreviewPair,
   onPreviewFile,
   language = "th",
+  showButtons = true,
 }) => {
   const t = translations[language];
   const isEn = language === "en";
@@ -78,6 +80,7 @@ export const DualUploadPanel: React.FC<DualUploadPanelProps> = ({
   const [localError, setLocalError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Derive active files list from propFiles or legacy image1/image2
   const activeFiles: UploadedImage[] =
@@ -186,50 +189,41 @@ export const DualUploadPanel: React.FC<DualUploadPanelProps> = ({
   return (
     <section className="no-print border border-slate-200 bg-white">
       {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-slate-50/80 px-5 py-3">
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <div className="flex items-center gap-2 font-semibold text-slate-900">
-            <Files className="h-4 w-4 text-emerald-700" />
-             <span>{isEn ? "File Upload" : "อัปโหลดไฟล์"}</span>
+      {!showButtons && (
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-slate-50/80 px-5 py-3">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <div className="flex items-center gap-2 font-semibold text-slate-900">
+              <Files className="h-4 w-4 text-emerald-700" />
+               <span>{isEn ? "File Upload" : "อัปโหลดไฟล์"}</span>
+            </div>
           </div>
 
-          {hasFiles && (
-            <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800">
-              <FileCheck className="h-3 w-3" />
-              <span>
-                {isEn
-                  ? `${activeFiles.length} file${activeFiles.length > 1 ? "s" : ""} ready for AI`
-                  : `เลือกแล้ว ${activeFiles.length} ไฟล์ (พร้อมให้โมเดลตรวจจับ)`}
-              </span>
-            </span>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {collapsible && (
+              <button
+                type="button"
+                onClick={() => setIsCollapsed((prev) => !prev)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-600 hover:text-slate-900 whitespace-nowrap shrink-0"
+              >
+                {isCollapsed ? (
+                  <>
+                    <span>{t.expand}</span>
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </>
+                ) : (
+                  <>
+                    <span>{t.collapse}</span>
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {collapsible && (
-            <button
-              type="button"
-              onClick={() => setIsCollapsed((prev) => !prev)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-600 hover:text-slate-900 whitespace-nowrap shrink-0"
-            >
-              {isCollapsed ? (
-                <>
-                  <span>{t.expand}</span>
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </>
-              ) : (
-                <>
-                  <span>{t.collapse}</span>
-                  <ChevronUp className="h-3.5 w-3.5" />
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Upload Body */}
-      {!isCollapsed && (
+      {(!showButtons || !isCollapsed) && (
         <div className="p-5">
           {activeError && (
             <div className="mb-4 flex items-start justify-between gap-3 border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
@@ -264,32 +258,78 @@ export const DualUploadPanel: React.FC<DualUploadPanelProps> = ({
             }}
           />
 
-          {/* Drag & Drop Upload Zone */}
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`cursor-pointer border-2 border-dashed p-6 text-center transition-colors ${
-              isDragging
-                ? "border-emerald-600 bg-emerald-50/50"
-                : "border-slate-300 bg-slate-50/40 hover:border-slate-400 hover:bg-slate-50"
-            }`}
-          >
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-xs border border-slate-200 text-slate-700">
-              <Upload className="h-5 w-5 text-emerald-700" />
+          {/* Hidden Camera Capture Input for Mobile/Tablet Scanning */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              handleProcessIncomingFiles(e.target.files, true);
+              e.target.value = "";
+            }}
+          />
+
+          {/* Two Main Functions: 1. อัพโหลด, 2. ถ่ายรูป */}
+          {showButtons && (
+            <div className="mb-5 grid grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-emerald-600 bg-emerald-50/90 p-5 text-center transition-all hover:bg-emerald-100 shadow-sm min-h-[96px] cursor-pointer"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-700 text-white shadow-xs">
+                  <Upload className="h-5 w-5" />
+                </div>
+                <span className="text-sm sm:text-base font-bold text-emerald-950">
+                  {t.btnUploadImage}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-slate-900 bg-slate-900 p-5 text-center transition-all hover:bg-slate-800 shadow-sm min-h-[96px] cursor-pointer"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-800 text-emerald-400 shadow-xs border border-slate-700">
+                  <FileImage className="h-5 w-5" />
+                </div>
+                <span className="text-sm sm:text-base font-bold text-white">
+                  {t.btnCameraScan}
+                </span>
+              </button>
             </div>
-            <p className="mt-2 text-sm font-semibold text-slate-800">
-              {isEn
-                ? "Click to choose files or drag & drop here (Select >1 file simultaneously)"
-                : "คลิกเพื่อเลือกไฟล์ หรือ ลากไฟล์มาวางที่นี่ (เลือกได้มากกว่า 1 ไฟล์พร้อมกัน)"}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              {isEn
-                ? "Supports arbitrary multiple files: Payment slips, order photos, tax invoices/receipts, or spreadsheets (XLSX, CSV). The AI model detects & extracts all."
-                : "รองรับการใส่ไฟล์มากกว่า 1 ไฟล์: สลิปโอนเงิน, ใบสั่งซื้อ, ใบเสร็จ/ใบกำกับภาษี ABB-FV หรือไฟล์ตาราง XLSX/CSV โมเดล AI จะคิดวิเคราะห์และตรวจจับร่วมกัน"}
-            </p>
-          </div>
+          )}
+
+          {/* Drag & Drop Upload Zone */}
+          {!showButtons && (
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`cursor-pointer border-2 border-dashed p-6 text-center transition-colors ${
+                isDragging
+                  ? "border-emerald-600 bg-emerald-50/50"
+                  : "border-slate-300 bg-slate-50/40 hover:border-slate-400 hover:bg-slate-50"
+              }`}
+            >
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-xs border border-slate-200 text-slate-700">
+                <Upload className="h-5 w-5 text-emerald-700" />
+              </div>
+              <p className="mt-2 text-sm font-semibold text-slate-800">
+                {isEn
+                  ? "Click to choose files or drag & drop here (Select >1 file simultaneously)"
+                  : "คลิกเพื่อเลือกไฟล์ หรือ ลากไฟล์มาวางที่นี่ (เลือกได้มากกว่า 1 ไฟล์พร้อมกัน)"}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {isEn
+                  ? "Supports arbitrary multiple files: Payment slips, order photos, tax invoices/receipts, or spreadsheets (XLSX, CSV). The AI model detects & extracts all."
+                  : "รองรับการใส่ไฟล์มากกว่า 1 ไฟล์: สลิปโอนเงิน, ใบสั่งซื้อ, ใบเสร็จ/ใบกำกับภาษี ABB-FV หรือไฟล์ตาราง XLSX/CSV โมเดล AI จะคิดวิเคราะห์และตรวจจับร่วมกัน"}
+              </p>
+            </div>
+          )}
 
           {/* Attached Files List */}
           {hasFiles && (

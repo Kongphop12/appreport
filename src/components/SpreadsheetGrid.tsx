@@ -108,7 +108,15 @@ function getColumnDefs(lang: Language): Array<{
       headerTitle: t.colPayment,
       subLabel: t.colPaymentSub,
       align: "left",
-      widthClass: "min-w-[195px]",
+      widthClass: "min-w-[170px]",
+    },
+    {
+      key: "cancelled",
+      excelCol: "G",
+      headerTitle: t.colCancelled,
+      subLabel: t.colCancelledSub,
+      align: "left",
+      widthClass: "min-w-[120px]",
     },
   ];
 }
@@ -273,44 +281,6 @@ export const SpreadsheetGrid: React.FC<SpreadsheetGridProps> = ({
 
         {/* Spreadsheet Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file || !onImportSpreadsheet) return;
-              try {
-                const { processSpreadsheetFile } = await import(
-                  "../utils/spreadsheetParser"
-                );
-                const { rows } = await processSpreadsheetFile(file);
-                onImportSpreadsheet(rows, file.name);
-              } catch (err: unknown) {
-                // handled by parent
-              }
-              e.target.value = "";
-            }}
-          />
-
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-100 whitespace-nowrap shrink-0"
-          >
-            <Upload className="h-3.5 w-3.5 text-emerald-700" />
-            <span>{t.importSpreadsheetBtn}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onAddEmptyRow}
-            className="inline-flex items-center gap-1.5 border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-100 whitespace-nowrap shrink-0"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>{t.addEmptyRowBtn}</span>
-          </button>
 
           <button
             type="button"
@@ -483,26 +453,10 @@ export const SpreadsheetGrid: React.FC<SpreadsheetGridProps> = ({
                         {t.emptyTableTitle}
                       </p>
                       <p className="text-xs text-slate-500">
-                        {t.emptyTableDesc}
+                        {language === "en" 
+                          ? "Please use the 'AI Upload' tab above to upload and process your files." 
+                          : "กรุณาใช้เมนู 'อัปโหลดไฟล์' ด้านบนเพื่ออัปโหลดไฟล์และประมวลผลข้อมูลรายงาน"}
                       </p>
-                      <div className="flex flex-wrap items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="inline-flex items-center gap-1.5 bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800"
-                        >
-                          <Upload className="h-3.5 w-3.5" />
-                          <span>{t.importSpreadsheetBtn}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={onAddEmptyRow}
-                          className="inline-flex items-center gap-1.5 border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-800 hover:bg-slate-50"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                          <span>{t.addEmptyRowBtn}</span>
-                        </button>
-                      </div>
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -614,6 +568,14 @@ export const SpreadsheetGrid: React.FC<SpreadsheetGridProps> = ({
                               <span className="truncate">
                                 {col.isNumeric
                                   ? formatCurrency(Number(cellValue) || 0)
+                                  : col.key === "cancelled"
+                                  ? (() => {
+                                      const c = String(cellValue || "").trim().toLowerCase();
+                                      if (c === "ใช่" || c === "yes" || c === "true" || c === "cancelled" || c === "1") {
+                                        return language === "en" ? "Yes" : "ใช่";
+                                      }
+                                      return String(cellValue || "-");
+                                    })()
                                   : String(cellValue || "-")}
                               </span>
                             </div>

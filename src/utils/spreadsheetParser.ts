@@ -90,7 +90,7 @@ export function parseSpreadsheetToReportRows(
 
   const resultRows: ReportRow[] = [];
 
-  // คอลัมน์อื่นๆ ที่ไม่ใช่เลขออเดอร์ ปล่อยเขาไป (ห้ามนำมาใส่เป็นเลขออเดอร์เด็ดขาด)
+  // คอลัมน์อื่นๆ ที่ไม่ใช่เลขออเดอร์ ปล่อยไป (ห้ามนำมาใส่เป็นเลขออเดอร์เด็ดขาด)
   const BLACKLIST_ORDER_COLUMNS = [
     "tracking",
     "track",
@@ -135,7 +135,7 @@ export function parseSpreadsheetToReportRows(
   ];
 
   rawJson.forEach((row, idx) => {
-    // 1. Order Number: กฎสำคัญ: "ชื่อโปรเจกต์" กับ "เลขออเดอร์" มันตรงกันมันคืออันเดียวกัน อันอื่นไม่ใช่ปล่อยเขา
+    // 1. Order Number: กฎสำคัญ: "ชื่อโปรเจกต์" กับ "เลขออเดอร์" มันตรงกันมันคืออันเดียวกัน อันอื่นไม่ใช่ปล่อย
     const rawOrderVal =
       // 1.1) หาจากชื่อโปรเจกต์ / โครงการ / Project (ตรงกับเลขออเดอร์คืออันเดียวกัน)
       findValueByKeywords(
@@ -272,6 +272,23 @@ export function parseSpreadsheetToReportRows(
         "ธนาคาร",
       ]) || "-";
 
+    const rawCancelled = findValueByKeywords(row, [
+      "ลูกค้ายกเลิก",
+      "status",
+      "สถานะ",
+      "cancelled",
+      "ยกเลิก",
+    ]).toLowerCase();
+    let cancelled = "-";
+    if (
+      rawCancelled.includes("ใช่") ||
+      rawCancelled.includes("yes") ||
+      rawCancelled.includes("true") ||
+      (rawCancelled.includes("ยกเลิก") && !rawCancelled.includes("ไม่"))
+    ) {
+      cancelled = "ใช่";
+    }
+
     resultRows.push({
       id: `row-${Date.now()}-${idx}`,
       orderNumber,
@@ -280,10 +297,12 @@ export function parseSpreadsheetToReportRows(
       vatAmount,
       salesChannel,
       paymentMethod,
+      cancelled,
       createdAt: new Date().toISOString().slice(0, 16).replace("T", " "),
       aiNote: `นำเข้าจากไฟล์ ${fileName}`,
     });
   });
+
 
   // ให้อิงจาก Primary Key (Order + Invoice / fv-abb) สร้างความสัมพันธ์เพื่อป้องกันข้อมูลซ้ำซ้อนระหว่างไฟล์
   const dedupedRows: ReportRow[] = [];

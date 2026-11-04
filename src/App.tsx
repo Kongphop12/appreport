@@ -22,20 +22,34 @@ import { DualUploadPanel } from "./components/DualUploadPanel";
 import { SpreadsheetGrid } from "./components/SpreadsheetGrid";
 import { PrintPreviewSheet } from "./components/PrintPreviewSheet";
 import { ReceiptLightbox } from "./components/ReceiptLightbox";
+import { StorageHub } from "./components/StorageHub";
 
 const STORAGE_ROWS_KEY = "sheetscan_abbfv_rows_v7";
 const STORAGE_META_KEY = "report_sale_order_meta_v4";
 const STORAGE_LANG_KEY = "sheetscan_abbfv_lang_v1";
 
+const getDefaultPrintDate = () => {
+  try {
+    return new Date().toLocaleDateString("th-TH", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  } catch {
+    return "3 พฤศจิกายน 2569";
+  }
+};
+
 const DEFAULT_META: ReportHeaderMeta = {
   companyName: "",
   reportTitle: "Report sale order",
   periodLabel: "พฤศจิกายน 2569",
-  printDate: "3 พฤศจิกายน 2569",
+  printDate: getDefaultPrintDate(),
   preparedBy: "",
   checkedBy: "",
   customHeaderBlank: "",
 };
+
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("sheet");
@@ -492,7 +506,7 @@ export function App() {
           {t.appName}
         </a>
 
-        <nav className="flex items-center gap-6 overflow-x-auto text-sm font-medium text-slate-600">
+        <nav className="flex items-center gap-4 sm:gap-6 overflow-x-auto text-sm font-medium text-slate-600">
           <button
             type="button"
             onClick={() => setActiveTab("sheet")}
@@ -506,6 +520,17 @@ export function App() {
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab("storage")}
+            className={`py-1 transition-colors whitespace-nowrap shrink-0 ${
+              activeTab === "storage"
+                ? "border-b-2 border-emerald-700 font-semibold text-slate-950"
+                : "hover:text-slate-900"
+            }`}
+          >
+            {t.tabStorage}
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab("print")}
             className={`py-1 transition-colors whitespace-nowrap shrink-0 ${
               activeTab === "print"
@@ -515,7 +540,6 @@ export function App() {
           >
             {t.tabPrint}
           </button>
-
         </nav>
 
         <div className="flex items-center gap-3 shrink-0">
@@ -591,7 +615,7 @@ export function App() {
           </div>
         )}
 
-        {/* Tab 1: Combined Excel Sheet + Dual Image Upload Bar */}
+        {/* Tab 1: Combined Excel Sheet */}
         {activeTab === "sheet" && (
           <div className="space-y-4">
             <DualUploadPanel
@@ -608,6 +632,7 @@ export function App() {
               onClearError={() => setExtractError(null)}
               collapsible={true}
               language={language}
+              showButtons={false}
               onPreviewPair={() =>
                 setLightboxState({
                   title:
@@ -677,15 +702,22 @@ export function App() {
           </div>
         )}
 
+        {/* Tab: Storage / เก็บข้อมูล */}
+        {activeTab === "storage" && (
+          <StorageHub language={language} onNotice={showNotice} />
+        )}
+
         {/* Tab 3: Print Preview Sheet */}
-        <PrintPreviewSheet
-          rows={filteredRows}
-          meta={meta}
-          onChangeMeta={setMeta}
-          showInteractiveControls={activeTab === "print"}
-          onTriggerPrint={handleTriggerPrint}
-          language={language}
-        />
+        {activeTab === "print" && (
+          <PrintPreviewSheet
+            rows={filteredRows}
+            meta={meta}
+            onChangeMeta={setMeta}
+            showInteractiveControls={true}
+            onTriggerPrint={handleTriggerPrint}
+            language={language}
+          />
+        )}
 
       </main>
 

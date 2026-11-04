@@ -228,6 +228,10 @@ async function startServer() {
                       description:
                         "6. ช่องทางการรับเงินตามเอกสารจริง ถ้าไม่มีให้ใส่ '-'",
                     },
+                    cancelled: {
+                      type: Type.STRING,
+                      description: "7. ลูกค้ายกเลิก ถ้าใช่ใส่ 'ใช่' ถ้าไม่ใช่ใส่ '-'",
+                    },
                     aiNote: {
                       type: Type.STRING,
                       description: "หมายเหตุสั้นๆ จากการตรวจจับข้อมูล",
@@ -262,6 +266,7 @@ async function startServer() {
           vatAmount?: number;
           salesChannel?: string;
           paymentMethod?: string;
+          cancelled?: string;
           aiNote?: string;
         }>;
         orderNumber?: string;
@@ -270,6 +275,7 @@ async function startServer() {
         vatAmount?: number;
         salesChannel?: string;
         paymentMethod?: string;
+        cancelled?: string;
         aiNote?: string;
       } = {};
 
@@ -298,6 +304,8 @@ async function startServer() {
         const abbFvNumber = (item.abbFvNumber || "-").trim();
         const salesChannel = (item.salesChannel || "Online Store").trim();
         const paymentMethod = (item.paymentMethod || "-").trim();
+        const rawCanc = String(item.cancelled || "").trim().toLowerCase();
+        const cancelled = rawCanc.includes("ใช่") || rawCanc.includes("yes") || rawCanc.includes("true") ? "ใช่" : "-";
         const aiNote = (item.aiNote || `สกัดจากเอกสาร ${inputFiles.length} ไฟล์`).trim();
 
         return {
@@ -307,6 +315,7 @@ async function startServer() {
           vatAmount,
           salesChannel,
           paymentMethod,
+          cancelled,
           aiNote,
         };
       });

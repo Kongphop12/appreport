@@ -14,9 +14,13 @@ export function generatePrintableReportHtml(
   const totalSales = rows.reduce((sum, r) => sum + (Number(r.salesAmount) || 0), 0);
   const totalVat = rows.reduce((sum, r) => sum + (Number(r.vatAmount) || 0), 0);
   const netPreVat = totalSales - totalVat;
+  const cancelledCount = rows.filter(r => {
+    const c = (r.cancelled || "").trim().toLowerCase();
+    return c === "ใช่" || c === "ยกเลิก" || c === "yes" || c === "cancelled" || c === "true" || c === "1";
+  }).length;
 
   const defaultPrintDate =
-    lang === "en" ? "November 3, 2026" : "3 พฤศจิกายน 2569";
+    lang === "en" ? " " : " ";
   const displayPrintDate = meta.printDate && meta.printDate.trim() !== "" ? meta.printDate : defaultPrintDate;
 
   const labels = {
@@ -30,17 +34,20 @@ export function generatePrintableReportHtml(
       period: "งวดรายงาน:",
       printDate: "วันที่พิมพ์:",
       sumTable: "รวมยอดในตาราง:",
-      totalCases: `รวม ${rows.length} เคส`,
+      totalCases: cancelledCount > 0 ? `รวม ${rows.length} เคส (ยกเลิก ${cancelledCount} เคส)` : `รวม ${rows.length} เคส`,
       emptyRows: "ไม่มีรายการข้อมูลในรายงาน",
       card1Title: "Case (เคสทั้งหมด)",
       card1Unit: "เคส",
-      card1Sub: `ผลรวมทั้งหมดของไฟล์ ${rows.length} รายการ`,
-      card2Title: "ยอดขายที่ได้รับในเดือน",
-      card2Unit: "บาท",
-      card2Sub: "ผลรวมยอดขายทั้งหมดของไฟล์",
+      card1Sub: cancelledCount > 0 ? `รวมทั้งหมด ${rows.length} เคส · ยกเลิก: ${cancelledCount} เคส` : `ผลรวมทั้งหมดของไฟล์ ${rows.length} รายการ`,
+      card2Title: "ลูกค้ายกเลิก",
+      card2Unit: "เคส",
+      card2Sub: "รายการที่ถูกยกเลิกในระบบ",
       card3Title: "ยอดขายจริง (ก่อนภาษี)",
       card3Unit: "บาท",
-      card3Sub: `VAT 7%: ${formatCurrency(totalVat)} บาท`,
+      card3Sub: "ไม่รวมภาษีมูลค่าเพิ่ม",
+      card4Title: "VAT 7%",
+      card4Unit: "บาท",
+      card4Sub: "ภาษีมูลค่าเพิ่มรวม",
       sigPrep: "ผู้จัดทำรายงาน",
       sigCheck: "สมุห์บัญชี / ผู้ตรวจสอบ",
       barTitle: "หน้ารายงานพร้อมพิมพ์ A4 (หน้าตั้ง) — หากหน้าต่างสั่งพิมพ์ไม่แสดง กรุณากดปุ่มสั่งพิมพ์",
@@ -53,20 +60,24 @@ export function generatePrintableReportHtml(
       vat: "4. VAT",
       channel: "5. Sales Channel",
       payment: "6. Payment Method",
+      cancelled: "7. Cancelled",
       period: "Report Period:",
       printDate: "Print Date:",
       sumTable: "Table Total:",
-      totalCases: `Total ${rows.length} cases`,
+      totalCases: cancelledCount > 0 ? `Total ${rows.length} cases (Cancelled: ${cancelledCount})` : `Total ${rows.length} cases`,
       emptyRows: "No data in report",
       card1Title: "Case (Total Cases)",
       card1Unit: "cases",
-      card1Sub: `Total file records: ${rows.length} items`,
-      card2Title: "Monthly Received Sales",
-      card2Unit: "THB",
-      card2Sub: "Total gross sales from file",
+      card1Sub: cancelledCount > 0 ? `Total ${rows.length} cases · Cancelled: ${cancelledCount}` : `Total file records: ${rows.length} items`,
+      card2Title: "Cancelled Orders",
+      card2Unit: "cases",
+      card2Sub: "Total cancelled orders",
       card3Title: "Net Sales (Pre-VAT)",
       card3Unit: "THB",
-      card3Sub: `VAT 7%: ${formatCurrency(totalVat)} THB`,
+      card3Sub: "Excluding VAT 7%",
+      card4Title: "VAT 7%",
+      card4Unit: "THB",
+      card4Sub: "Total Output VAT",
       sigPrep: "Report Prepared By",
       sigCheck: "Accountant / Verified By",
       barTitle: "Ready to Print A4 (Portrait) — Click button if print dialog does not appear",
@@ -74,9 +85,17 @@ export function generatePrintableReportHtml(
     },
   }[lang];
 
+  const getCancelledDisplay = (val: string | undefined, l: Language) => {
+    const c = (val || "").trim().toLowerCase();
+    if (c === "ใช่" || c === "yes" || c === "true" || c === "cancelled" || c === "1") {
+      return l === "en" ? "Yes" : "ใช่";
+    }
+    return val || "-";
+  };
+
   const tableRowsHtml =
     rows.length === 0
-      ? `<tr><td colspan="7" class="text-center empty-cell">${labels.emptyRows}</td></tr>`
+      ? `<tr><td colspan="8" class="text-center empty-cell">${labels.emptyRows}</td></tr>`
       : rows
           .map(
             (r, i) => `
@@ -88,6 +107,7 @@ export function generatePrintableReportHtml(
         <td class="text-right font-mono">${formatCurrency(r.vatAmount)}</td>
         <td>${escapeHtml(r.salesChannel)}</td>
         <td>${escapeHtml(r.paymentMethod)}</td>
+        <td class="text-center">${escapeHtml(getCancelledDisplay(r.cancelled, lang))}</td>
       </tr>`
           )
           .join("");
@@ -191,10 +211,10 @@ export function generatePrintableReportHtml(
       color: #64748b;
     }
 
-    /* 3 Summary Cards */
+    /* 4 Summary Cards */
     .summary-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       border: 1px solid #0f172a;
       background-color: #f8fafc;
       margin-bottom: 20px;
@@ -288,28 +308,21 @@ export function generatePrintableReportHtml(
       <thead>
         <tr>
           <th style="width: 34px; text-align: center;">#</th>
-          <th style="width: 105px;">${labels.order}</th>
-          <th style="width: 125px;">${labels.abbFv}</th>
-          <th style="width: 90px; text-align: right;">${labels.sales}</th>
-          <th style="width: 80px; text-align: right;">${labels.vat}</th>
-          <th style="width: 95px;">${labels.channel}</th>
-          <th style="width: 100px;">${labels.payment}</th>
+          <th style="width: 95px;">${labels.order}</th>
+          <th style="width: 110px;">${labels.abbFv}</th>
+          <th style="width: 80px; text-align: right;">${labels.sales}</th>
+          <th style="width: 70px; text-align: right;">${labels.vat}</th>
+          <th style="width: 85px;">${labels.channel}</th>
+          <th style="width: 90px;">${labels.payment}</th>
+          <th style="width: 75px; text-align: center;">${labels.cancelled}</th>
         </tr>
       </thead>
       <tbody>
         ${tableRowsHtml}
       </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="3" class="text-right">${labels.sumTable}</td>
-          <td class="text-right font-mono">${formatCurrency(totalSales)}</td>
-          <td class="text-right font-mono">${formatCurrency(totalVat)}</td>
-          <td colspan="2" style="font-size: 10px; color: #475569;">${labels.totalCases}</td>
-        </tr>
-      </tfoot>
     </table>
 
-    <!-- 3 Summary Metric Cards (ย้ายลงมาข้างล่าง) -->
+    <!-- 4 Summary Metric Cards -->
     <div class="summary-grid">
       <div class="summary-card">
         <span class="card-label">${labels.card1Title}</span>
@@ -319,7 +332,7 @@ export function generatePrintableReportHtml(
 
       <div class="summary-card">
         <span class="card-label">${labels.card2Title}</span>
-        <div class="card-val card-val-green">${formatCurrency(totalSales)} <span style="font-size:12px;font-weight:normal;">${labels.card2Unit}</span></div>
+        <div class="card-val" style="color: #dc2626;">${cancelledCount} <span style="font-size:12px;font-weight:normal;">${labels.card2Unit}</span></div>
         <div class="card-sub">${labels.card2Sub}</div>
       </div>
 
@@ -327,6 +340,12 @@ export function generatePrintableReportHtml(
         <span class="card-label">${labels.card3Title}</span>
         <div class="card-val">${formatCurrency(netPreVat)} <span style="font-size:12px;font-weight:normal;">${labels.card3Unit}</span></div>
         <div class="card-sub">${labels.card3Sub}</div>
+      </div>
+
+      <div class="summary-card">
+        <span class="card-label">${labels.card4Title}</span>
+        <div class="card-val">${formatCurrency(totalVat)} <span style="font-size:12px;font-weight:normal;">${labels.card4Unit}</span></div>
+        <div class="card-sub">${labels.card4Sub}</div>
       </div>
     </div>
   </div>

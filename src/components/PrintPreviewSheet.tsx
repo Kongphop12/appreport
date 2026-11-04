@@ -29,10 +29,14 @@ export const PrintPreviewSheet: React.FC<PrintPreviewSheetProps> = ({
     const sales = rows.reduce((sum, r) => sum + (Number(r.salesAmount) || 0), 0);
     const vat = rows.reduce((sum, r) => sum + (Number(r.vatAmount) || 0), 0);
     const preVat = sales - vat;
-    return { sales, vat, preVat };
+    const cancelledCount = rows.filter(r => {
+      const c = (r.cancelled || "").trim().toLowerCase();
+      return c === "ใช่" || c === "ยกเลิก" || c === "yes" || c === "cancelled" || c === "true" || c === "1";
+    }).length;
+    return { sales, vat, preVat, cancelledCount };
   }, [rows]);
 
-  // วันที่พิมพ์เริ่มต้น "3 พฤศจิกายน 2569" หรือวันที่แก้ไขได้
+  // วันที่พิมพ์เริ่มต้น " " หรือวันที่แก้ไขได้
   const defaultDate = language === "en" ? "November 3, 2026" : "3 พฤศจิกายน 2569";
   const displayPrintDate = meta.printDate && meta.printDate.trim() !== "" ? meta.printDate : defaultDate;
 
@@ -159,7 +163,7 @@ export const PrintPreviewSheet: React.FC<PrintPreviewSheetProps> = ({
               />
             </div>
 
-            {/* วันที่พิมพ์: 3 พฤศจิกายน 2569 ให้สามารถแก้ไขได้ */}
+            {/* วันที่พิมพ์:  ให้สามารถแก้ไขได้ */}
             <div>
               <label className="mb-1 block text-xs font-semibold text-emerald-800 flex items-center gap-1">
                 <span>{t.fieldPrintDate}</span>
@@ -250,6 +254,9 @@ export const PrintPreviewSheet: React.FC<PrintPreviewSheetProps> = ({
               <th className="w-[95px] border border-slate-900 px-2 py-1.5 text-left font-semibold">
                 {t.colPayment}
               </th>
+              <th className="w-[75px] border border-slate-900 px-2 py-1.5 text-center font-semibold">
+                {t.colCancelled}
+              </th>
             </tr>
           </thead>
 
@@ -257,7 +264,7 @@ export const PrintPreviewSheet: React.FC<PrintPreviewSheetProps> = ({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="border border-slate-900 px-4 py-8 text-center text-slate-500"
                 >
                   {t.noDataInReport}
@@ -287,35 +294,24 @@ export const PrintPreviewSheet: React.FC<PrintPreviewSheetProps> = ({
                   <td className="border border-slate-900 px-2 py-1 truncate max-w-[95px]" title={row.paymentMethod}>
                     {row.paymentMethod}
                   </td>
+                  <td className="border border-slate-900 px-2 py-1 text-center truncate max-w-[75px]" title={row.cancelled || "-"}>
+                    {(() => {
+                      const c = (row.cancelled || "").trim().toLowerCase();
+                      if (c === "ใช่" || c === "yes" || c === "true" || c === "cancelled" || c === "1") {
+                        return language === "en" ? "Yes" : "ใช่";
+                      }
+                      return row.cancelled || "-";
+                    })()}
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
 
-          <tfoot>
-            {/* Table Sum Row */}
-            <tr className="bg-slate-100 font-bold text-slate-950">
-              <td
-                colSpan={3}
-                className="border border-slate-900 px-2 py-1.5 text-right"
-              >
-                {t.tableSumLabel}
-              </td>
-              <td className="border border-slate-900 px-2 py-1.5 text-right font-mono tabular-nums">
-                {formatCurrency(totals.sales)}
-              </td>
-              <td className="border border-slate-900 px-2 py-1.5 text-right font-mono tabular-nums">
-                {formatCurrency(totals.vat)}
-              </td>
-              <td colSpan={2} className="border border-slate-900 px-2 py-1.5 text-[10px] text-slate-700">
-                {t.tableCasesSummary.replace("{count}", String(rows.length))}
-              </td>
-            </tr>
-          </tfoot>
         </table>
 
-        {/* 3 Summary Metrics Cards: ย้ายลงมาข้างล่างใต้ตารางตามที่ระบุ */}
-        <div className="mt-4 mb-6 grid grid-cols-3 divide-x divide-slate-300 border border-slate-900 bg-slate-50 text-left">
+        {/* 4 Summary Metrics Cards */}
+        <div className="mt-4 mb-6 grid grid-cols-4 divide-x divide-slate-300 border border-slate-900 bg-slate-50 text-left">
           {/* Card 1: Case (เคสทั้งหมด) */}
           <div className="p-3">
             <span className="text-[11px] font-bold text-slate-700 block">
@@ -332,19 +328,19 @@ export const PrintPreviewSheet: React.FC<PrintPreviewSheetProps> = ({
             </p>
           </div>
 
-          {/* Card 2: ยอดขายที่ได้รับในเดือน */}
+          {/* Card 2: ลูกค้ายกเลิก (แทนที่ยอดขายที่ได้รับในเดือน) */}
           <div className="p-3">
             <span className="text-[11px] font-bold text-slate-700 block">
-              {t.cardReceivedSalesTitle}
+              {language === "en" ? "Cancelled Orders" : "ลูกค้ายกเลิก"}
             </span>
             <div className="mt-1 flex items-baseline gap-1">
-              <span className="font-mono text-lg font-extrabold text-emerald-800">
-                {formatCurrency(totals.sales)}
+              <span className="font-mono text-lg font-extrabold text-red-600">
+                {totals.cancelledCount}
               </span>
-              <span className="text-xs font-semibold text-slate-700">{t.unitBaht}</span>
+              <span className="text-xs font-semibold text-slate-700">{t.unitCase}</span>
             </div>
             <p className="mt-0.5 text-[10px] text-slate-500">
-              {t.cardReceivedSalesSub}
+              {language === "en" ? "Total cancelled orders" : "รายการที่ถูกยกเลิกในระบบ"}
             </p>
           </div>
 
@@ -360,10 +356,27 @@ export const PrintPreviewSheet: React.FC<PrintPreviewSheetProps> = ({
               <span className="text-xs font-semibold text-slate-700">{t.unitBaht}</span>
             </div>
             <p className="mt-0.5 text-[10px] font-medium text-slate-600">
-              {t.cardNetSalesVatSub.replace("{vat}", formatCurrency(totals.vat))}
+              {language === "en" ? "Excluding VAT 7%" : "ไม่รวมภาษีมูลค่าเพิ่ม"}
+            </p>
+          </div>
+
+          {/* Card 4: VAT 7% */}
+          <div className="p-3">
+            <span className="text-[11px] font-bold text-slate-700 block">
+              VAT 7%
+            </span>
+            <div className="mt-1 flex items-baseline gap-1">
+              <span className="font-mono text-lg font-extrabold text-slate-950">
+                {formatCurrency(totals.vat)}
+              </span>
+              <span className="text-xs font-semibold text-slate-700">{t.unitBaht}</span>
+            </div>
+            <p className="mt-0.5 text-[10px] font-medium text-slate-600">
+              {language === "en" ? "Total Output VAT" : "ภาษีมูลค่าเพิ่มรวม"}
             </p>
           </div>
         </div>
+
       </div>
     </div>
   );

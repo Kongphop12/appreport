@@ -42,9 +42,9 @@ export function generatePrintableReportHtml(
       card2Title: "ลูกค้ายกเลิก",
       card2Unit: "เคส",
       card2Sub: "รายการที่ถูกยกเลิกในระบบ",
-      card3Title: "ยอดขายจริง (ก่อนภาษี)",
+      card3Title: "ยอดขายจริง (รวมภาษีมูลค่าเพิ่ม)",
       card3Unit: "บาท",
-      card3Sub: "ไม่รวมภาษีมูลค่าเพิ่ม",
+      card3Sub: "รวมภาษีมูลค่าเพิ่มแล้ว",
       card4Title: "VAT 7%",
       card4Unit: "บาท",
       card4Sub: "ภาษีมูลค่าเพิ่มรวม",
@@ -72,9 +72,9 @@ export function generatePrintableReportHtml(
       card2Title: "Cancelled Orders",
       card2Unit: "cases",
       card2Sub: "Total cancelled orders",
-      card3Title: "Net Sales (Pre-VAT)",
+      card3Title: "Net Sales (Including VAT)",
       card3Unit: "THB",
-      card3Sub: "Excluding VAT 7%",
+      card3Sub: "Including VAT 7%",
       card4Title: "VAT 7%",
       card4Unit: "THB",
       card4Sub: "Total Output VAT",
@@ -248,6 +248,36 @@ export function generatePrintableReportHtml(
       margin-top: 2px;
     }
 
+    /* 3 Handwritten Boxes */
+    .handwritten-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border-left: 1px solid #0f172a;
+      border-right: 1px solid #0f172a;
+      border-bottom: 1px solid #0f172a;
+      background-color: #f8fafc;
+      margin-bottom: 20px;
+    }
+    .handwritten-card {
+      padding: 10px 12px;
+      border-right: 1px solid #cbd5e1;
+    }
+    .handwritten-card:last-child {
+      border-right: none;
+    }
+    .handwritten-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #334155;
+      display: block;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .handwritten-line {
+      height: 20px;
+      border-bottom: 1px dashed #94a3b8;
+    }
+
 
     .no-print-bar {
       background: #0f172a;
@@ -338,7 +368,7 @@ export function generatePrintableReportHtml(
 
       <div class="summary-card">
         <span class="card-label">${labels.card3Title}</span>
-        <div class="card-val">${formatCurrency(netPreVat)} <span style="font-size:12px;font-weight:normal;">${labels.card3Unit}</span></div>
+        <div class="card-val">${formatCurrency(totalSales)} <span style="font-size:12px;font-weight:normal;">${labels.card3Unit}</span></div>
         <div class="card-sub">${labels.card3Sub}</div>
       </div>
 
@@ -346,6 +376,22 @@ export function generatePrintableReportHtml(
         <span class="card-label">${labels.card4Title}</span>
         <div class="card-val">${formatCurrency(totalVat)} <span style="font-size:12px;font-weight:normal;">${labels.card4Unit}</span></div>
         <div class="card-sub">${labels.card4Sub}</div>
+      </div>
+    </div>
+
+    <!-- 3 Additional Blank Boxes for Handwritten Notes -->
+    <div class="handwritten-grid">
+      <div class="handwritten-card">
+        <span class="handwritten-label">case credit</span>
+        <div class="handwritten-line"></div>
+      </div>
+      <div class="handwritten-card">
+        <span class="handwritten-label">credit 30 วัน</span>
+        <div class="handwritten-line"></div>
+      </div>
+      <div class="handwritten-card">
+        <span class="handwritten-label">ยอดเงิน</span>
+        <div class="handwritten-line"></div>
       </div>
     </div>
   </div>

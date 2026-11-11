@@ -344,19 +344,19 @@ export const PrintPreviewSheet: React.FC<PrintPreviewSheetProps> = ({
             </p>
           </div>
 
-          {/* Card 3: ยอดขายจริง (ก่อนภาษี) */}
+          {/* Card 3: ยอดขายจริง (รวมภาษีมูลค่าเพิ่ม) */}
           <div className="p-3">
             <span className="text-[11px] font-bold text-slate-700 block">
-              {t.cardNetSalesTitle}
+              {language === "en" ? "Net Sales (Including VAT)" : "ยอดขายจริง (รวมภาษีมูลค่าเพิ่ม)"}
             </span>
             <div className="mt-1 flex items-baseline gap-1">
               <span className="font-mono text-lg font-extrabold text-slate-950">
-                {formatCurrency(totals.preVat)}
+                {formatCurrency(totals.sales)}
               </span>
               <span className="text-xs font-semibold text-slate-700">{t.unitBaht}</span>
             </div>
             <p className="mt-0.5 text-[10px] font-medium text-slate-600">
-              {language === "en" ? "Excluding VAT 7%" : "ไม่รวมภาษีมูลค่าเพิ่ม"}
+              {language === "en" ? "Including VAT 7%" : "รวมภาษีมูลค่าเพิ่มแล้ว"}
             </p>
           </div>
 
@@ -373,6 +373,37 @@ export const PrintPreviewSheet: React.FC<PrintPreviewSheetProps> = ({
             </div>
             <p className="mt-0.5 text-[10px] font-medium text-slate-600">
               {language === "en" ? "Total Output VAT" : "ภาษีมูลค่าเพิ่มรวม"}
+            </p>
+          </div>
+        </div>
+
+        {/* 3 Additional Blank Boxes for Handwritten Notes */}
+        <div className="mb-6 grid grid-cols-3 divide-x divide-slate-300 border-x border-b border-slate-900 bg-slate-50 text-left">
+          <div className="p-3.5">
+            <span className="text-[11px] font-bold text-slate-700 block uppercase">
+              case credit
+            </span>
+            <div className="mt-2 h-6 border-b border-dashed border-slate-400"></div>
+            <p className="mt-1 text-[10px] text-slate-400 italic">
+              {language === "en" ? " " : " "}
+            </p>
+          </div>
+          <div className="p-3.5">
+            <span className="text-[11px] font-bold text-slate-700 block uppercase">
+              credit 30 วัน
+            </span>
+            <div className="mt-2 h-6 border-b border-dashed border-slate-400"></div>
+            <p className="mt-1 text-[10px] text-slate-400 italic">
+              {language === "en" ? " " : " "}
+            </p>
+          </div>
+          <div className="p-3.5">
+            <span className="text-[11px] font-bold text-slate-700 block uppercase">
+              ยอดเงิน
+            </span>
+            <div className="mt-2 h-6 border-b border-dashed border-slate-400"></div>
+            <p className="mt-1 text-[10px] text-slate-400 italic">
+              {language === "en" ? " " : " "}
             </p>
           </div>
         </div>

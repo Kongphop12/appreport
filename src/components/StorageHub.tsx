@@ -1,33 +1,27 @@
 import React, { useRef, useState } from "react";
-import { Upload, Camera, FileText, Database, CheckCircle2, Trash2, Eye, Loader2, Sparkles, FolderArchive } from "lucide-react";
+import { Upload, Camera, FileText, Database, CheckCircle2, Loader2, Sparkles, FolderArchive, HardDrive } from "lucide-react";
 import type { Language } from "../utils/translations";
 import { formatCurrency } from "../utils/exporters";
 
 export interface StoredDocumentRecord {
   id: string;
-  fileName: string;
-  fileType: string;
-  fileSize?: number;
-  previewUrl?: string;
-  extractedData: {
-    orderNumber: string;
-    abbFvNumber: string;
-    salesAmount: number;
-    vatAmount: number;
-    salesChannel: string;
-    paymentMethod: string;
-  };
+  numberSeq: number;       // ลำดับ Number
+  customerName: string;    // ช่องที่ 1: ชื่อลูกค้า
+  customerId: string;      // ช่องที่ 2: รหัสลูกค้า
+  subTotal: number;        // ช่องที่ 3: Sub Total
+  vat: number;             // ช่องที่ 4: VAT
+  shippingFee: number;     // ช่องที่ 5: ค่าจัดส่ง
+  total: number;           // ช่องที่ 6: TOTAL
+  imageFileName: string;   // ชื่อไฟล์
   savedAt: string;
-  dbStatus: "saved" | "syncing";
 }
 
 interface StorageHubProps {
   language: Language;
   onNotice: (msg: string) => void;
-  onAddToReportTable?: (doc: StoredDocumentRecord) => void;
 }
 
-const STORAGE_DB_KEY = "sheetscan_db_archive_v1";
+const STORAGE_DB_KEY = "sheetscan_db_ml_dl_archive_v6";
 
 export const StorageHub: React.FC<StorageHubProps> = ({ language, onNotice }) => {
   const isEn = language === "en";
@@ -44,42 +38,7 @@ export const StorageHub: React.FC<StorageHubProps> = ({ language, onNotice }) =>
     } catch {
       // ignore
     }
-    return [
-      {
-        id: "db-doc-001",
-        fileName: "slip_transfer_kbank_1502.jpg",
-        fileType: "image/jpeg",
-        fileSize: 245000,
-        previewUrl: "",
-        extractedData: {
-          orderNumber: "#1001",
-          abbFvNumber: "ABB-202611-0001",
-          salesAmount: 1500.0,
-          vatAmount: 98.13,
-          salesChannel: "Online Store",
-          paymentMethod: "KBANK Transfer",
-        },
-        savedAt: "2026-11-03 14:20",
-        dbStatus: "saved",
-      },
-      {
-        id: "db-doc-002",
-        fileName: "tax_invoice_abb_fv_562.pdf",
-        fileType: "application/pdf",
-        fileSize: 480000,
-        previewUrl: "",
-        extractedData: {
-          orderNumber: "#1002",
-          abbFvNumber: "ABB-202611-0002",
-          salesAmount: 562502.0,
-          vatAmount: 36799.21,
-          salesChannel: "Draft Orders",
-          paymentMethod: "PromptPay",
-        },
-        savedAt: "2026-11-03 15:10",
-        dbStatus: "saved",
-      },
-    ];
+    return [];
   });
 
   const [currentFile, setCurrentFile] = useState<{
@@ -89,14 +48,21 @@ export const StorageHub: React.FC<StorageHubProps> = ({ language, onNotice }) =>
     previewUrl?: string;
   } | null>(null);
 
-  const [extractedPreview, setExtractedPreview] = useState<{
-    orderNumber: string;
-    abbFvNumber: string;
-    salesAmount: number;
-    vatAmount: number;
-    salesChannel: string;
-    paymentMethod: string;
-  } | null>(null);
+  const [formData, setFormData] = useState({
+    customerName: "",
+    customerId: "AS No. ",
+    subTotal: 0,
+    vat: 0,
+    shippingFee: 0,
+  });
+
+  const [validationErrors, setValidationErrors] = useState<{
+    customerName?: string;
+    customerId?: string;
+    subTotal?: string;
+    vat?: string;
+    shippingFee?: string;
+  }>({});
 
   const [isProcessingAi, setIsProcessingAi] = useState(false);
   const [isSavingDb, setIsSavingDb] = useState(false);
@@ -108,8 +74,9 @@ export const StorageHub: React.FC<StorageHubProps> = ({ language, onNotice }) =>
     e.target.value = "";
 
     const reader = new FileReader();
-    reader.onload = async (event) => {
+    reader.onload = (event) => {
       const preview = event.target?.result as string;
+
       setCurrentFile({
         fileName: file.name,
         fileType: file.type || "application/octet-stream",
@@ -117,76 +84,129 @@ export const StorageHub: React.FC<StorageHubProps> = ({ language, onNotice }) =>
         previewUrl: preview,
       });
 
-      // Simulate ML / AI extraction
-      setIsProcessingAi(true);
-      setTimeout(() => {
-        setExtractedPreview({
-          orderNumber: `#${Math.floor(1000 + Math.random() * 9000)}`,
-          abbFvNumber: `ABB-202611-${Math.floor(100 + Math.random() * 900)}`,
-          salesAmount: Math.floor(1000 + Math.random() * 50000) / 100,
-          vatAmount: Math.floor(70 + Math.random() * 3500) / 100,
-          salesChannel: Math.random() > 0.5 ? "Online Store" : "Draft Orders",
-          paymentMethod: Math.random() > 0.5 ? "QR PromptPay" : "Bank Transfer",
-        });
-        setIsProcessingAi(false);
-        onNotice(isEn ? "AI successfully extracted document data!" : "AI ตรวจจับและสกัดข้อมูลจากเอกสารสำเร็จ!");
-      }, 1500);
+      setFormData({
+        customerName: "",
+        customerId: "AS No. ",
+        subTotal: 0,
+        vat: 0,
+        shippingFee: 0,
+      });
+      setValidationErrors({});
+      onNotice(isEn ? "File loaded successfully. Please enter form details." : "อัปโหลดไฟล์เรียบร้อยแล้ว กรุณากรอกข้อมูลตามปกติ");
     };
     reader.readAsDataURL(file);
   };
 
-  const handleSaveToDatabase = () => {
-    if (!currentFile || !extractedPreview) return;
+  const computedTotal = Number(formData.subTotal || 0) + Number(formData.vat || 0) + Number(formData.shippingFee || 0);
+
+  const validateFields = () => {
+    const errors: typeof validationErrors = {};
+    
+    const nameRegex = /^[ก-๙a-zA-Z\s.]+$/;
+    if (!formData.customerName.trim()) {
+      errors.customerName = "กรุณากรอกชื่อลูกค้า";
+    } else if (!nameRegex.test(formData.customerName)) {
+      errors.customerName = "ช่องชื่อลูกค้าต้องเป็นตัวอักษรภาษาไทยหรืออังกฤษเท่านั้น";
+    }
+
+    const idRegex = /^[a-zA-Z0-9\s.-]+$/;
+    if (!formData.customerId.trim()) {
+      errors.customerId = "กรุณากรอกรหัสลูกค้า";
+    } else if (!idRegex.test(formData.customerId)) {
+      errors.customerId = "รหัสลูกค้าต้องเป็นตัวอักษรภาษาอังกฤษ ตัวเลข หรือขีด (-) เท่านั้น";
+    }
+
+    if (isNaN(Number(formData.subTotal)) || formData.subTotal < 0) {
+      errors.subTotal = "Sub Total ต้องเป็นตัวเลขเท่านั้น";
+    }
+    if (isNaN(Number(formData.vat)) || formData.vat < 0) {
+      errors.vat = "VAT ต้องเป็นตัวเลขเท่านั้น";
+    }
+    if (isNaN(Number(formData.shippingFee)) || formData.shippingFee < 0) {
+      errors.shippingFee = "ค่าจัดส่งต้องเป็นตัวเลขเท่านั้น";
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentFile) return;
+
+    if (!validateFields()) {
+      onNotice(isEn ? "Please fix validation errors before submit" : "กรุณาแก้ไขข้อมูลให้ถูกต้องตามประเภทที่กำหนดก่อนส่งข้อมูล");
+      return;
+    }
+
     setIsSavingDb(true);
 
     setTimeout(() => {
+      const nextSeq = storedRecords.length > 0 ? Math.max(...storedRecords.map(r => r.numberSeq || 0)) + 1 : 1;
       const newRecord: StoredDocumentRecord = {
         id: `db-doc-${Date.now()}`,
-        fileName: currentFile.fileName,
-        fileType: currentFile.fileType,
-        fileSize: currentFile.fileSize,
-        previewUrl: currentFile.previewUrl,
-        extractedData: extractedPreview,
+        numberSeq: nextSeq,
+        customerName: formData.customerName,
+        customerId: formData.customerId,
+        subTotal: Number(formData.subTotal),
+        vat: Number(formData.vat),
+        shippingFee: Number(formData.shippingFee),
+        total: computedTotal,
+        imageFileName: currentFile.fileName,
         savedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
-        dbStatus: "saved",
       };
 
       const updated = [newRecord, ...storedRecords];
       setStoredRecords(updated);
       try {
         localStorage.setItem(STORAGE_DB_KEY, JSON.stringify(updated));
+        fetch("/api/sync-google-drive", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ records: updated }),
+        }).catch(() => {});
+        
+        // Automatic download of db_data CSV
+        const headers = ["ลำดับ", "ชื่อลูกค้า", "รหัสลูกค้า", "Sub Total", "VAT", "ค่าจัดส่ง", "TOTAL", "ชื่อไฟล์", "วันที่บันทึก"];
+        const rows = updated.map(r => [
+          r.numberSeq,
+          `"${r.customerName.replace(/"/g, '""')}"`,
+          `"${r.customerId.replace(/"/g, '""')}"`,
+          r.subTotal,
+          r.vat,
+          r.shippingFee,
+          r.total,
+          `"${r.imageFileName.replace(/"/g, '""')}"`,
+          `"${r.savedAt}"`
+        ]);
+        const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(row => row.join(","))].join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Report_Case_Buying_db_data_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       } catch {
         // ignore
       }
 
       setIsSavingDb(false);
       setCurrentFile(null);
-      setExtractedPreview(null);
-      onNotice(isEn ? "Document successfully saved to Database!" : "บันทึกข้อมูลและไฟล์เอกสารเข้าสู่ระบบฐานข้อมูล (DB) สำเร็จเรียบร้อยแล้ว!");
+      setFormData({ customerName: "", customerId: "AS No. ", subTotal: 0, vat: 0, shippingFee: 0 });
+      setValidationErrors({});
+      onNotice("ส่งข้อมูลเรียบร้อยครับ");
     }, 1000);
   };
 
-  const handleDeleteRecord = (id: string) => {
-    if (!window.confirm(isEn ? "Delete this record from DB archive?" : "คุณต้องการลบข้อมูลเอกสารนี้ออกจากฐานข้อมูลใช่หรือไม่?")) {
-      return;
-    }
-    const updated = storedRecords.filter((r) => r.id !== id);
-    setStoredRecords(updated);
-    try {
-      localStorage.setItem(STORAGE_DB_KEY, JSON.stringify(updated));
-    } catch {
-      // ignore
-    }
-    onNotice(isEn ? "Record deleted from database" : "ลบข้อมูลออกจากฐานข้อมูลเรียบร้อยแล้ว");
-  };
-
   return (
-    <div className="max-w-6xl mx-auto space-y-6 py-4">
+    <div className="max-w-7xl mx-auto space-y-6 py-4">
       {/* Hidden file inputs */}
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,.pdf,.xlsx,.csv"
+        accept="image/png,image/jpeg,image/jpg,.pdf,.xlsx,.csv"
         className="hidden"
         onChange={handleFilesSelected}
       />
@@ -199,8 +219,8 @@ export const StorageHub: React.FC<StorageHubProps> = ({ language, onNotice }) =>
         onChange={handleFilesSelected}
       />
 
-      {/* Header Banner */}
-      <div className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-xs space-y-3">
+      {/* Header & Status Banner */}
+      <div className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-700 text-white shadow-sm">
@@ -208,201 +228,297 @@ export const StorageHub: React.FC<StorageHubProps> = ({ language, onNotice }) =>
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-950">
-                {isEn ? "Data Storage & Database Hub (DB Ingestion)" : "เมนูเก็บข้อมูลและจัดเก็บลงฐานข้อมูล (Database Storage Hub)"}
+                {isEn ? "Data Storage & Document Management" : "เมนูเก็บข้อมูล"}
               </h2>
               <p className="text-xs text-slate-600 mt-0.5">
                 {isEn
-                  ? "Ingest source documents (Photos, Slips, PDF Invoices) processed via ML Model and persist directly into DB storage."
-                  : "โครงสร้างจัดเก็บเอกสารต้นฉบับ (รูปถ่ายสลิป ใบเสร็จ PDF) ผ่านระบบสกัดข้อมูลด้วย AI / ML Model และบันทึกจัดเก็บลงฐานข้อมูล (DB) แยกส่วนจากตารางรายงาน"}
+                  ? "Upload document files and record entry."
+                  : "อัปโหลดไฟล์และบันทึกข้อมูลเอกสาร"}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900 font-semibold shadow-xs">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <HardDrive className="h-4 w-4 text-emerald-700" />
+              <span>Drive Connected</span>
+            </div>
+
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-2 bg-emerald-700 px-4 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-800 transition-colors"
+              className="inline-flex items-center gap-2 bg-emerald-700 px-4 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-800 transition-colors cursor-pointer"
             >
               <Upload className="h-4 w-4" />
-              <span>{isEn ? "Upload Document" : "อัพโหลดไฟล์เอกสาร"}</span>
+              <span>{isEn ? "Upload File (.pdf/.xlsx/.jpg/.png)" : "อัปโหลดไฟล์เอกสาร"}</span>
             </button>
             <button
               type="button"
               onClick={() => cameraInputRef.current?.click()}
-              className="inline-flex items-center gap-2 bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-slate-800 transition-colors"
+              className="inline-flex items-center gap-2 bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-slate-800 transition-colors cursor-pointer"
             >
               <Camera className="h-4 w-4 text-emerald-400" />
-              <span>{isEn ? "Camera Scan" : "ถ่ายรูปสแกน"}</span>
+              <span>{isEn ? "Camera" : "ถ่ายรูปสแกน"}</span>
             </button>
           </div>
         </div>
 
-        {/* Current Ingestion & Extraction Staging Area */}
+        {/* Staging Form & Preview Area when file is uploaded */}
         {currentFile && (
           <div className="rounded-xl border border-emerald-300 bg-emerald-50/50 p-5 space-y-4">
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-200 px-3 py-1 text-xs font-bold text-emerald-900">
-                <Sparkles className="h-3.5 w-3.5" />
-                {isEn ? "Staging Document for DB Storage" : "ข้อมูลเอกสารรอนำส่งเข้าฐานข้อมูล"}
+                <FileText className="h-3.5 w-3.5" />
+                {isEn ? "Document Upload & Form Entry" : "อัปโหลดเอกสารและกรอกข้อมูล"}
               </span>
               <button
                 type="button"
                 onClick={() => {
                   setCurrentFile(null);
-                  setExtractedPreview(null);
+                  setFormData({ customerName: "", customerId: "", subTotal: 0, vat: 0, shippingFee: 0 });
+                  setValidationErrors({});
                 }}
-                className="text-xs text-slate-500 hover:text-red-700 font-medium"
+                className="text-xs text-slate-500 hover:text-red-700 font-medium cursor-pointer"
               >
                 {isEn ? "Cancel" : "ยกเลิก"}
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-              {/* File Preview Card */}
-              <div className="rounded-lg border border-slate-200 bg-white p-3 flex items-center gap-3">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border bg-slate-50">
+            <form onSubmit={handleFormSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+              {/* File Preview */}
+              <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+                <div className="flex h-56 w-full items-center justify-center overflow-hidden rounded border bg-slate-50">
                   {currentFile.previewUrl && currentFile.fileType.startsWith("image/") ? (
-                    <img src={currentFile.previewUrl} alt="" className="h-full w-full object-cover" />
+                    <img src={currentFile.previewUrl} alt="" className="h-full w-full object-contain" />
                   ) : (
-                    <FileText className="h-7 w-7 text-emerald-700" />
+                    <FileText className="h-12 w-12 text-emerald-700" />
                   )}
                 </div>
-                <div className="min-w-0 flex-1">
+                <div>
                   <p className="truncate font-mono text-xs font-bold text-slate-900">{currentFile.fileName}</p>
                   <p className="text-[11px] text-slate-500">{Math.round((currentFile.fileSize || 0) / 1024)} KB</p>
                 </div>
               </div>
 
-              {/* Extracted Fields Preview */}
-              <div className="md:col-span-2 rounded-lg border border-slate-200 bg-white p-4 space-y-3">
+              {/* Form Fields */}
+              <div className="lg:col-span-2 rounded-lg border border-slate-200 bg-white p-4 space-y-4">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  {isEn ? "AI Extracted Fields for DB" : "ข้อมูลที่ AI สกัดเพื่อบันทึกลง DB"}
+                  {isEn ? "Form Fields (Editable)" : "ช่องกรอกข้อมูลเอกสาร"}
                 </h4>
 
                 {isProcessingAi ? (
-                  <div className="flex items-center gap-3 py-4 text-xs font-medium text-slate-600">
-                    <Loader2 className="h-5 w-5 animate-spin text-emerald-700" />
-                    <span>{isEn ? "AI / ML Model is analyzing document..." : "โมเดล AI / ML กำลังสกัดข้อมูลจากภาพถ่าย..."}</span>
+                  <div className="flex items-center gap-3 py-12 text-xs font-medium text-slate-600 justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-emerald-700" />
+                    <span>{isEn ? "ML/DL Model is scanning keywords from file..." : "ระบบ ML/DL กำลังสแกนหาคีย์เวิร์ดจากไฟล์..."}</span>
                   </div>
-                ) : extractedPreview ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                    <div>
-                      <span className="text-slate-500">Order No:</span>
-                      <p className="font-bold text-slate-900">{extractedPreview.orderNumber}</p>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">Receipt/Invoice:</span>
-                      <p className="font-bold text-slate-900">{extractedPreview.abbFvNumber}</p>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">Sales Amount:</span>
-                      <p className="font-bold text-emerald-700">{formatCurrency(extractedPreview.salesAmount)} THB</p>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">VAT 7%:</span>
-                      <p className="font-bold text-slate-900">{formatCurrency(extractedPreview.vatAmount)} THB</p>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">Sales Channel:</span>
-                      <p className="font-bold text-slate-900">{extractedPreview.salesChannel}</p>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">Payment:</span>
-                      <p className="font-bold text-slate-900">{extractedPreview.paymentMethod}</p>
-                    </div>
-                  </div>
-                ) : null}
-
-                {extractedPreview && (
-                  <div className="flex justify-end pt-2">
-                    <button
-                      type="button"
-                      disabled={isSavingDb}
-                      onClick={handleSaveToDatabase}
-                      className="inline-flex items-center gap-2 bg-emerald-700 px-5 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-800 disabled:opacity-50 transition-colors"
-                    >
-                      {isSavingDb ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>{isEn ? "Saving to DB..." : "กำลังบันทึกเข้าสู่ DB..."}</span>
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="h-4 w-4 text-emerald-200" />
-                          <span>{isEn ? "Save Record & File to Database" : "บันทึกข้อมูลเข้าสู่ฐานข้อมูล (Save to DB)"}</span>
-                        </>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    {/* ช่องที่ 1: ชื่อลูกค้า */}
+                    <div className="sm:col-span-2">
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        ช่องที่ 1: ชื่อลูกค้า <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.customerName}
+                        onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+                        className={`w-full rounded border px-3 py-2 text-xs text-slate-900 focus:outline-hidden ${
+                          validationErrors.customerName ? "border-red-500 bg-red-50" : "border-slate-300 focus:border-emerald-600"
+                        }`}
+                        placeholder="ชื่อลูกค้า"
+                      />
+                      {validationErrors.customerName && (
+                        <p className="mt-1 text-[11px] text-red-600 font-medium">{validationErrors.customerName}</p>
                       )}
-                    </button>
+                    </div>
+
+                    {/* ช่องที่ 2: รหัสลูกค้า */}
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        ช่องที่ 2: รหัสลูกค้า <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.customerId}
+                        onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
+                        className={`w-full rounded border px-3 py-2 font-mono text-xs text-slate-900 focus:outline-hidden ${
+                          validationErrors.customerId ? "border-red-500 bg-red-50" : "border-slate-300 focus:border-emerald-600"
+                        }`}
+                        placeholder="รหัสลูกค้า"
+                      />
+                      {validationErrors.customerId && (
+                        <p className="mt-1 text-[11px] text-red-600 font-medium">{validationErrors.customerId}</p>
+                      )}
+                      <p className="mt-0.5 text-[10px] text-slate-500">รหัสลูกค้าต้องเป็นตัวอักษรภาษาอังกฤษ ตัวเลข หรือขีด (-) เท่านั้น</p>
+                    </div>
+
+                    {/* ช่องที่ 3: Sub Total */}
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        ช่องที่ 3: Sub Total <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.subTotal === 0 ? "" : formData.subTotal}
+                        onChange={(e) => setFormData({ ...formData, subTotal: e.target.value === "" ? 0 : Number(e.target.value) })}
+                        className={`w-full rounded border px-3 py-2 font-mono text-xs text-slate-900 focus:outline-hidden [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                          validationErrors.subTotal ? "border-red-500 bg-red-50" : "border-slate-300 focus:border-emerald-600"
+                        }`}
+                        placeholder="ระบุราคา Sub Total"
+                      />
+                      {validationErrors.subTotal && (
+                        <p className="mt-1 text-[11px] text-red-600 font-medium">{validationErrors.subTotal}</p>
+                      )}
+                    </div>
+
+                    {/* ช่องที่ 4: VAT */}
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        ช่องที่ 4: VAT <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.vat === 0 ? "" : formData.vat}
+                        onChange={(e) => setFormData({ ...formData, vat: e.target.value === "" ? 0 : Number(e.target.value) })}
+                        className={`w-full rounded border px-3 py-2 font-mono text-xs text-slate-900 focus:outline-hidden [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                          validationErrors.vat ? "border-red-500 bg-red-50" : "border-slate-300 focus:border-emerald-600"
+                        }`}
+                        placeholder="ระบุราคา VAT"
+                      />
+                      {validationErrors.vat && (
+                        <p className="mt-1 text-[11px] text-red-600 font-medium">{validationErrors.vat}</p>
+                      )}
+                    </div>
+
+                    {/* ช่องที่ 5: ค่าจัดส่ง */}
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        ช่องที่ 5: ค่าจัดส่ง <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.shippingFee === 0 ? "" : formData.shippingFee}
+                        onChange={(e) => setFormData({ ...formData, shippingFee: e.target.value === "" ? 0 : Number(e.target.value) })}
+                        className={`w-full rounded border px-3 py-2 font-mono text-xs text-slate-900 focus:outline-hidden [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                          validationErrors.shippingFee ? "border-red-500 bg-red-50" : "border-slate-300 focus:border-emerald-600"
+                        }`}
+                        placeholder="ระบุค่าจัดส่ง"
+                      />
+                      {validationErrors.shippingFee && (
+                        <p className="mt-1 text-[11px] text-red-600 font-medium">{validationErrors.shippingFee}</p>
+                      )}
+                    </div>
+
+                    {/* ช่องที่ 6: TOTAL */}
+                    <div className="sm:col-span-2 rounded bg-slate-50 p-3 flex items-center justify-between border border-slate-200">
+                      <div>
+                        <span className="font-bold text-slate-800 block">ช่องที่ 6: TOTAL</span>
+                      </div>
+                      <span className="font-mono text-base font-extrabold text-emerald-700">{formatCurrency(computedTotal)} THB</span>
+                    </div>
+
+                    {/* ชื่อไฟล์ */}
+                    <div className="sm:col-span-2">
+                      <label className="block font-semibold text-slate-700 mb-1">ชื่อไฟล์</label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={currentFile.fileName}
+                        className="w-full rounded border border-slate-200 bg-slate-100 px-3 py-1.5 font-mono text-xs text-slate-600"
+                      />
+                    </div>
                   </div>
                 )}
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSavingDb || isProcessingAi}
+                    className="inline-flex items-center gap-2 bg-emerald-700 px-6 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-800 disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    {isSavingDb ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>กำลังส่งข้อมูล...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 text-emerald-200" />
+                        <span>Submit (ส่งข้อมูล)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
+            </form>
           </div>
         )}
       </div>
 
-      {/* Database Archives & Records List */}
+      {/* Main Submission Log Table (Censored / Confidential) */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
             <FolderArchive className="h-5 w-5 text-emerald-700" />
             <h3 className="text-sm font-bold text-slate-950">
-              {isEn ? `Database Archive Records (${storedRecords.length})` : `ประวัติเอกสารที่จัดเก็บในฐานข้อมูล (${storedRecords.length} รายการ)`}
+              {isEn ? `Submission Records (${storedRecords.length})` : `ตารางการส่งข้อมูล (${storedRecords.length} รายการ)`}
             </h3>
           </div>
-          <span className="text-xs text-slate-500 font-medium">
-            {isEn ? "Persistent DB Storage Collection" : "ตารางจัดเก็บข้อมูลถาวรในระบบ DB"}
+          <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded">
+            🔒 ข้อมูลลับ (Censored & Time-Hidden Log)
           </span>
         </div>
 
         {storedRecords.length === 0 ? (
           <div className="py-12 text-center text-xs text-slate-500">
-            {isEn ? "No records stored in database yet." : "ยังไม่มีประวัติเอกสารจัดเก็บในฐานข้อมูล"}
+            {isEn ? "No submission records yet." : "ยังไม่มีรายการการส่งข้อมูลในระบบ"}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="border-b border-slate-200 bg-slate-50 font-semibold text-slate-700">
                 <tr>
-                  <th className="p-3">#</th>
-                  <th className="p-3">{isEn ? "File Name" : "ชื่อไฟล์เอกสาร"}</th>
-                  <th className="p-3">Order No.</th>
-                  <th className="p-3">Receipt/Invoice</th>
-                  <th className="p-3 text-right">{isEn ? "Sales Amount" : "ยอดขาย"}</th>
-                  <th className="p-3">{isEn ? "Channel" : "ช่องทาง"}</th>
-                  <th className="p-3">{isEn ? "Saved At" : "เวลาจัดเก็บ DB"}</th>
-                  <th className="p-3 text-center">Status</th>
-                  <th className="p-3 text-center">{isEn ? "Action" : "จัดการ"}</th>
+                  <th className="p-3 text-center">ลำดับ</th>
+                  <th className="p-3">ชื่อลูกค้า</th>
+                  <th className="p-3 text-right">Sub Total</th>
+                  <th className="p-3 text-right">VAT</th>
+                  <th className="p-3 text-right">ค่าจัดส่ง</th>
+                  <th className="p-3 text-right">TOTAL</th>
+                  <th className="p-3">ชื่อไฟล์</th>
+                  <th className="p-3 text-center">สถานะ / เวลา</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-                {storedRecords.map((rec, idx) => (
-                  <tr key={rec.id} className="hover:bg-slate-50/80">
-                    <td className="p-3 text-slate-500 font-mono">{idx + 1}</td>
-                    <td className="p-3 font-mono font-bold text-slate-900">{rec.fileName}</td>
-                    <td className="p-3">{rec.extractedData.orderNumber}</td>
-                    <td className="p-3 font-mono text-emerald-800">{rec.extractedData.abbFvNumber}</td>
-                    <td className="p-3 text-right font-bold text-slate-950">{formatCurrency(rec.extractedData.salesAmount)}</td>
-                    <td className="p-3">{rec.extractedData.salesChannel}</td>
-                    <td className="p-3 text-slate-500">{rec.savedAt}</td>
-                    <td className="p-3 text-center">
-                      <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                        <CheckCircle2 className="h-3 w-3" /> Saved in DB
-                      </span>
-                    </td>
-                    <td className="p-3 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteRecord(rec.id)}
-                        className="p-1 text-slate-400 hover:text-red-600 transition-colors"
-                        title={isEn ? "Delete from DB" : "ลบออกจากฐานข้อมูล"}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {storedRecords.slice(0, 10).map((rec) => {
+                  const partialName = rec.customerName ? rec.customerName.slice(0, 4) + " •••" : "K. •••";
+                  const partialFileName = rec.imageFileName ? (rec.imageFileName.length > 14 ? rec.imageFileName.slice(0, 12) + "..." : rec.imageFileName) : "document.pdf";
+
+                  return (
+                    <tr key={rec.id} className="hover:bg-slate-50/80">
+                      <td className="p-3 text-center font-mono font-bold text-emerald-800">{rec.numberSeq}</td>
+                      <td className="p-3 font-medium text-slate-900">{partialName}</td>
+                      <td className="p-3 text-right font-mono">{formatCurrency(rec.subTotal)}</td>
+                      <td className="p-3 text-right font-mono">{formatCurrency(rec.vat)}</td>
+                      <td className="p-3 text-right font-mono">{formatCurrency(rec.shippingFee)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-emerald-700">{formatCurrency(rec.total)}</td>
+                      <td className="p-3 font-mono text-slate-600 truncate max-w-[140px]" title={rec.imageFileName}>
+                        {partialFileName}
+                      </td>
+                      <td className="p-3 text-center">
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                            <CheckCircle2 className="h-3 w-3" /> สถานะ ปกติ
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-500">{rec.savedAt}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -42,7 +42,7 @@ export interface ReportHeaderMeta {
   customHeaderBlank?: string;
 }
 
-export type ActiveTab = "sheet" | "print" | "storage";
+export type ActiveTab = "sheet" | "print" | "buying" | "storage";
 
 export type ColumnKey =
   | "orderNumber"

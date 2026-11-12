@@ -1,6 +1,6 @@
 {
-  "name": "Report sale order",
-  "description": "โปรแกรมตารางรายงานยอดขายและใบกำกับภาษี",
+  "name": "Program Report",
+  "description": "โปรแกรมบริหารจัดการระบบและประมวลผลเอกสาร",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -3,11 +3,12 @@ export type Language = "th" | "en";
 export const translations = {
   th: {
     // App Header & Nav
-    appName: "Program Report sale order",
+    appName: "Program Report",
     tabSheet: "ตารางรายงาน",
     tabUploadData: "นำเข้า",
     tabUpload: "อัปโหลดรูป AI",
     tabPrint: "ประมวลผล",
+    tabBuying: "Buying",
     tabStorage: "เก็บข้อมูล",
     btnUploadImage: "อัพโหลด",
     btnCameraScan: "ถ่ายรูป",
@@ -134,11 +135,12 @@ export const translations = {
 
   en: {
     // App Header & Nav
-    appName: "Program Report sale order",
+    appName: "Program Report",
     tabSheet: "Spreadsheet",
     tabUploadData: "Import",
     tabUpload: "AI Upload",
     tabPrint: "Process",
+    tabBuying: "Buying",
     tabStorage: "Storage",
     btnUploadImage: "Upload",
     btnCameraScan: "Camera Photo",

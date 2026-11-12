@@ -23,6 +23,7 @@ import { SpreadsheetGrid } from "./components/SpreadsheetGrid";
 import { PrintPreviewSheet } from "./components/PrintPreviewSheet";
 import { ReceiptLightbox } from "./components/ReceiptLightbox";
 import { StorageHub } from "./components/StorageHub";
+import { BuyingHub } from "./components/BuyingHub";
 
 const STORAGE_ROWS_KEY = "sheetscan_abbfv_rows_v7";
 const STORAGE_META_KEY = "report_sale_order_meta_v4";
@@ -42,7 +43,7 @@ const getDefaultPrintDate = () => {
 
 const DEFAULT_META: ReportHeaderMeta = {
   companyName: "",
-  reportTitle: "Report sale order",
+  reportTitle: "Program Management System",
   periodLabel: "พฤศจิกายน 2569",
   printDate: getDefaultPrintDate(),
   preparedBy: "",
@@ -520,17 +521,6 @@ export function App() {
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("storage")}
-            className={`py-1 transition-colors whitespace-nowrap shrink-0 ${
-              activeTab === "storage"
-                ? "border-b-2 border-emerald-700 font-semibold text-slate-950"
-                : "hover:text-slate-900"
-            }`}
-          >
-            {t.tabStorage}
-          </button>
-          <button
-            type="button"
             onClick={() => setActiveTab("print")}
             className={`py-1 transition-colors whitespace-nowrap shrink-0 ${
               activeTab === "print"
@@ -539,6 +529,28 @@ export function App() {
             }`}
           >
             {t.tabPrint}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("buying")}
+            className={`py-1 transition-colors whitespace-nowrap shrink-0 ${
+              activeTab === "buying"
+                ? "border-b-2 border-emerald-700 font-semibold text-slate-950"
+                : "hover:text-slate-900"
+            }`}
+          >
+            {t.tabBuying}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("storage")}
+            className={`py-1 transition-colors whitespace-nowrap shrink-0 ${
+              activeTab === "storage"
+                ? "border-b-2 border-emerald-700 font-semibold text-slate-950"
+                : "hover:text-slate-900"
+            }`}
+          >
+            {t.tabStorage}
           </button>
         </nav>
 
@@ -571,14 +583,6 @@ export function App() {
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={handleTriggerPrint}
-            className="inline-flex items-center gap-1.5 bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-slate-800 whitespace-nowrap shrink-0"
-          >
-            <Printer className="h-3.5 w-3.5 text-emerald-400" />
-            <span>{t.printReportBtn}</span>
-          </button>
         </div>
       </header>
 
@@ -705,6 +709,11 @@ export function App() {
         {/* Tab: Storage / เก็บข้อมูล */}
         {activeTab === "storage" && (
           <StorageHub language={language} onNotice={showNotice} />
+        )}
+
+        {/* Tab: Buying / จัดซื้อ */}
+        {activeTab === "buying" && (
+          <BuyingHub language={language} onNotice={showNotice} />
         )}
 
 

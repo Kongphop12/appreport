@@ -252,7 +252,7 @@ def extract_and_summarize_sales(file_paths):
     return combined_df
 
 
-class ReportSaleOrderApp:
+class ProgramManagementSystemApp:
     COLUMNS = (
         "idx",
         "order",
@@ -265,7 +265,7 @@ class ReportSaleOrderApp:
 
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Report sale order (Python DL Model)")
+        self.root.title("Program Management System (Python DL Model)")
         self.root.geometry("1220x720")
         self.root.configure(bg="#f8fafc")
 
